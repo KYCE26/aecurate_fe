@@ -19,6 +19,7 @@
         <v-list nav class="p-0">
           <v-list-item 
             to="/" 
+            exact 
             prepend-icon="mdi-view-dashboard-outline" 
             title="Dashboard" 
             class="mb-1 rounded-xl hover:bg-white/5"
@@ -37,15 +38,31 @@
               <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Master Data</p>
               <v-divider class="border-slate-700"></v-divider>
             </div>
+            
+            <!-- FIX: Tambahkan property to="/inventory" dan active-class -->
             <v-list-item 
+              to="/inventory" 
               prepend-icon="mdi-package-variant-closed" 
               title="Katalog Barang" 
               class="mb-1 rounded-xl hover:bg-white/5"
+              active-class="bg-blue-600 text-white"
             ></v-list-item>
+            
+            <!-- FIX: Tambahkan property to="/hubs" dan active-class -->
             <v-list-item 
+              to="/hubs" 
               prepend-icon="mdi-map-marker-radius-outline" 
               title="Lokasi Hub" 
               class="mb-1 rounded-xl hover:bg-white/5"
+              active-class="bg-blue-600 text-white"
+            ></v-list-item>
+
+            <v-list-item 
+              to="/roster" 
+              prepend-icon="mdi-account-clock-outline" 
+              title="Roster & Shift" 
+              class="mb-1 rounded-xl hover:bg-white/5"
+              active-class="bg-blue-600 text-white"
             ></v-list-item>
           </template>
         </v-list>
