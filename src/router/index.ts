@@ -39,6 +39,11 @@ const router = createRouter({
           name: 'Roster',
           component: () => import('../pages/Roster.vue'),
         },
+        { path: 'inbound', name: 'Inbound', component: () => import('../pages/Inbound.vue') },
+        { path: 'request', name: 'Request', component: () => import('../pages/RequestItem.vue') },
+        { path: 'handover', name: 'Handover', component: () => import('../pages/Handover.vue') },
+        { path: 'mutation', name: 'Mutation', component: () => import('../pages/Mutation.vue') },
+        { path: 'return', name: 'Return', component: () => import('../pages/Return.vue') },
         // Kalau lu bikin halaman Master Hub atau Antrian Tugas nanti, masukinnya DI SINI ya!
       ],
     },
