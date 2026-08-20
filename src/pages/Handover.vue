@@ -1,76 +1,174 @@
 <template>
-  <div class="p-4 md:p-8 max-w-md mx-auto">
+  <div class="p-4 md:p-8 max-w-lg mx-auto pb-24">
     <div class="text-center mb-6">
       <h1 class="text-2xl font-black text-slate-800 tracking-tight">Serah Terima Barang</h1>
-      <p class="text-slate-500 font-medium text-sm mt-1">Sistem pemindahan tanggung jawab logistik.</p>
+      <p class="text-slate-500 font-medium text-sm mt-1">Pindahkan tanggung jawab logistik ke kru lain.</p>
     </div>
 
-    <!-- Toggle Penyerah / Penerima -->
-    <v-tabs v-model="tab" color="blue-darken-3" align-tabs="center" bg-color="slate-100" class="rounded-xl mb-6 p-1">
-      <v-tab value="send" class="rounded-lg font-bold">Saya Menyerahkan</v-tab>
-      <v-tab value="receive" class="rounded-lg font-bold">Saya Menerima</v-tab>
-    </v-tabs>
+    <v-card elevation="0" class="p-6 md:p-8 rounded-[1.5rem] border border-slate-200 shadow-sm">
+      <v-form ref="form" @submit.prevent="submitHandover">
 
-    <v-window v-model="tab" class="overflow-visible">
-      
-      <!-- MODE: PENYERAH -->
-      <v-window-item value="send">
-        <v-card elevation="0" class="p-6 rounded-[1.5rem] border border-slate-200 text-center">
-          <div class="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-blue-100">
-            <v-icon icon="mdi-qrcode-scan" size="36" color="blue-darken-3"></v-icon>
+        <label class="block text-sm font-bold text-slate-700 mb-2">Barang yang Diserahkan</label>
+        <v-autocomplete
+          v-model="formData.barang_id"
+          :items="availableItems"
+          item-title="name"
+          item-value="ID"
+          placeholder="Pilih barang..."
+          variant="outlined"
+          density="comfortable"
+          class="mb-2 enterprise-input"
+          :rules="[v => !!v || 'Barang wajib dipilih']"
+        ></v-autocomplete>
+
+        <!-- Indikator Stok -->
+        <v-expand-transition>
+          <div v-if="selectedItemData" class="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-xl flex justify-between items-center">
+            <span class="text-sm font-medium text-blue-800">Stok Tersedia:</span>
+            <span class="text-lg font-black text-blue-900">{{ selectedItemData.stok_tersedia }} Unit</span>
           </div>
-          <h3 class="text-lg font-bold text-slate-800 mb-2">Buat Kode Serah Terima</h3>
-          <p class="text-sm text-slate-500 mb-6">Pilih tugas/barang yang akan diserahkan, lalu tunjukkan kode QR ke penerima.</p>
-          <v-btn block size="large" color="slate-800" class="rounded-xl font-bold text-none">Buat Kode QR</v-btn>
-        </v-card>
-      </v-window-item>
+        </v-expand-transition>
 
-      <!-- MODE: PENERIMA -->
-      <v-window-item value="receive">
-        <v-card elevation="0" class="p-6 rounded-[1.5rem] border border-slate-200">
-          <p class="text-sm font-bold text-slate-700 mb-2 text-center">Masukkan Kode / Scan QR Penyerah</p>
-          <v-text-field v-model="transactionId" placeholder="Misal: TRX-8829" variant="outlined" density="comfortable" class="mb-4" hide-details></v-text-field>
-          <v-btn block size="large" color="slate-200" variant="flat" class="text-slate-700 rounded-xl font-bold mb-6" @click="cekTransaksi">Cari Data</v-btn>
+        <label class="block text-sm font-bold text-slate-700 mb-2">Jumlah (Qty)</label>
+        <div class="flex items-center gap-4 mb-6 bg-slate-50 p-2 rounded-2xl border border-slate-200">
+          <v-btn icon="mdi-minus" variant="tonal" color="red-darken-1" size="large" class="rounded-xl" @click="formData.qty > 1 ? formData.qty-- : null"></v-btn>
+          <input type="number" v-model="formData.qty" min="1" class="w-full text-center text-4xl font-black text-slate-800 bg-transparent focus:outline-none" />
+          <v-btn icon="mdi-plus" variant="tonal" color="green-darken-1" size="large" class="rounded-xl" @click="formData.qty++"></v-btn>
+        </div>
 
-          <!-- Tampil Jika Transaksi Ditemukan -->
-          <div v-if="showVerification" class="p-4 bg-orange-50 border border-orange-200 rounded-xl relative overflow-hidden">
-            <div class="absolute top-0 right-0 p-2 opacity-10">
-               <v-icon icon="mdi-shield-check" size="80"></v-icon>
-            </div>
-            <p class="text-xs font-bold text-orange-600 uppercase tracking-wider mb-1">Verifikasi Barang</p>
-            <h4 class="font-black text-slate-800 text-lg mb-1">TRX-8829</h4>
-            <p class="text-sm text-slate-600 font-medium mb-4">Dari: Taufik Rachman (Gudang Utama)</p>
-            
-            <ul class="text-sm font-bold text-slate-800 space-y-2 mb-6">
-              <li class="flex justify-between border-b border-orange-100 pb-1"><span>HT Motorola</span> <span>x5</span></li>
-              <li class="flex justify-between border-b border-orange-100 pb-1"><span>Trash Bag</span> <span>x10</span></li>
-            </ul>
+        <label class="block text-sm font-bold text-slate-700 mb-2">Kru Penerima</label>
+        <v-autocomplete
+          v-model="formData.penerima_id"
+          :items="rosterStore.users"
+          item-title="name"
+          item-value="ID"
+          placeholder="Ketik nama kru penerima..."
+          variant="outlined"
+          density="comfortable"
+          class="mb-4 enterprise-input"
+          :rules="[v => !!v || 'Penerima wajib dipilih']"
+        ></v-autocomplete>
 
-            <v-btn block size="x-large" color="green-darken-2" class="rounded-xl font-black tracking-widest shadow-lg shadow-green-900/20" @click="konfirmasiTerima">
-              KONFIRMASI DITERIMA
-            </v-btn>
-          </div>
-        </v-card>
-      </v-window-item>
+        <label class="block text-sm font-bold text-slate-700 mb-2">Keterangan / Lokasi</label>
+        <v-textarea
+          v-model="formData.keterangan"
+          placeholder="Misal: Diserahkan di Checkpoint 2, kondisi lengkap."
+          variant="outlined"
+          density="comfortable"
+          rows="2"
+          class="mb-8 enterprise-input"
+          hide-details="auto"
+        ></v-textarea>
 
-    </v-window>
+        <v-btn 
+          type="submit"
+          block 
+          size="x-large" 
+          color="blue-darken-3" 
+          variant="flat" 
+          class="rounded-xl shadow-lg shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all" 
+          :loading="transactionStore.isProcessing"
+        >
+          <span class="font-bold tracking-widest text-sm uppercase">Konfirmasi Serah Terima</span>
+        </v-btn>
+
+      </v-form>
+    </v-card>
+    
+    <!-- Snackbar Notifikasi -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" :timeout="3000" class="mt-16">
+      <div class="flex items-center gap-3 font-bold tracking-wide">
+        <v-icon :icon="snackbar.icon" size="20"></v-icon>
+        {{ snackbar.text }}
+      </div>
+    </v-snackbar>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useInventoryStore } from '../stores/inventory'
+import { useRosterStore } from '../stores/roster'
+import { useTransactionStore } from '../stores/transaction'
+import { useAuthStore } from '../stores/auth' // 👇 Tambahin AuthStore
 
-const tab = ref('send')
-const transactionId = ref('')
-const showVerification = ref(false)
+const inventoryStore = useInventoryStore()
+const rosterStore = useRosterStore()
+const transactionStore = useTransactionStore()
+const authStore = useAuthStore() // 👇 Panggil AuthStore
 
-const cekTransaksi = () => {
-  if(transactionId.value) showVerification.value = true
+const form = ref<any>(null)
+const formData = ref({
+  barang_id: null,
+  qty: 1,
+  penerima_id: null,
+  keterangan: ''
+})
+
+onMounted(async () => {
+  await inventoryStore.fetchItems()
+  await rosterStore.fetchUsers() 
+})
+
+const availableItems = computed(() => {
+  return inventoryStore.items.filter(item => item.stok_tersedia > 0)
+})
+
+const selectedItemData = computed(() => {
+  if (!formData.value.barang_id) return null
+  return inventoryStore.items.find(i => i.ID === formData.value.barang_id)
+})
+
+const snackbar = ref({ show: false, text: '', color: 'success', icon: 'mdi-check-circle' })
+const showNotif = (text: string, type: 'success' | 'error' = 'success') => {
+  snackbar.value = { show: true, text, color: type === 'success' ? 'green-darken-2' : 'red-darken-2', icon: type === 'success' ? 'mdi-check-circle' : 'mdi-alert-circle' }
 }
 
-const konfirmasiTerima = () => {
-  alert('Barang resmi berpindah tangan ke Anda!')
-  showVerification.value = false
-  transactionId.value = ''
+const submitHandover = async () => {
+  const { valid } = await form.value.validate()
+  if (!valid) return
+
+  if (selectedItemData.value && formData.value.qty > selectedItemData.value.stok_tersedia) {
+    showNotif('Jumlah melebihi stok yang tersedia!', 'error')
+    return
+  }
+
+  // 👇 UBAH PAYLOAD-NYA DI SINI SESUAI STRUCT GOLANG
+  const payload = {
+    barang_id: formData.value.barang_id!,
+    qty: Number(formData.value.qty),
+    from_user_id: authStore.user.id, // Otomatis ambil ID akun yang lagi login
+    to_user_id: formData.value.penerima_id!,
+    keterangan: formData.value.keterangan
+  }
+
+  const result = await transactionStore.processHandover(payload)
+
+  if (result.success) {
+    showNotif('Serah terima berhasil dicatat!', 'success')
+    formData.value = { barang_id: null, qty: 1, penerima_id: null, keterangan: '' }
+    await inventoryStore.fetchItems()
+  } else {
+    showNotif(result.message, 'error')
+  }
 }
 </script>
+
+<style scoped>
+:deep(.v-field) {
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+:deep(.v-field:hover) { border-color: #cbd5e1; }
+:deep(.v-field--focused) {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+:deep(.v-field__outline) { display: none; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+input[type="number"] { -moz-appearance: textfield; }
+</style>

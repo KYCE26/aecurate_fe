@@ -1,33 +1,61 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import api from '../plugins/axios'
 
 export const useAuthStore = defineStore('auth', () => {
-  // Ambil data dari localStorage jika ada
-  const token = ref(localStorage.getItem('token') || '')
-  const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
+  const user = ref<any>(JSON.parse(localStorage.getItem('user') || 'null'))
+  const token = ref<string>(localStorage.getItem('token') || '')
 
-  const login = async (email: string, role: string) => {
-    // MOCKUP API LOGIN: Simulasi request ke backend
-    token.value = 'dummy-jwt-token-aecurate'
-    user.value = { 
-      name: email.split('@')[0], 
-      role: role, // 'admin' atau 'crew'
-      isAvailable: true 
+  // 👇 TAMBAHIN FUNGSI INI BIAR ROUTER LU NGGAK ERROR
+  const isAuthenticated = () => {
+    return !!token.value
+  }
+
+const login = async (email: string, password: string) => {
+    try {
+      const response = await api.post('/auth/login', { email, password })
+      const data = response.data
+
+      // 👇 TAMBAHIN 2 BARIS INI (Normalisasi Role Golang ke format Frontend kita)
+      if (data.user.role === 'administrator') data.user.role = 'admin'
+      if (data.user.role === 'petugas') data.user.role = 'crew'
+
+      // Simpan ke state Pinia
+      user.value = data.user
+      token.value = data.token
+
+      // Simpan ke localStorage
+      localStorage.setItem('user', JSON.stringify(data.user))
+      localStorage.setItem('token', data.token)
+
+      return { success: true }
+    } catch (error: any) {
+      return { 
+        success: false, 
+        message: error.response?.data?.error || 'Terjadi kesalahan koneksi ke server.'
+      }
     }
-    
-    // Simpan ke Local Storage
-    localStorage.setItem('token', token.value)
-    localStorage.setItem('user', JSON.stringify(user.value))
+  }
+
+const register = async (name: string, email: string, password: string) => {
+    try {
+      const response = await api.post('/auth/register', { name, email, password })
+      return { success: true, message: response.data.message }
+    } catch (error: any) {
+      return { 
+        success: false, 
+        message: error.response?.data?.error || 'Terjadi kesalahan saat mendaftar.'
+      }
+    }
   }
 
   const logout = () => {
-    token.value = ''
     user.value = null
-    localStorage.removeItem('token')
+    token.value = ''
     localStorage.removeItem('user')
+    localStorage.removeItem('token')
   }
 
-  const isAuthenticated = () => !!token.value
-
-  return { token, user, login, logout, isAuthenticated }
+  // 👇 JANGAN LUPA MASUKIN isAuthenticated KE DALAM RETURN INI
+  return { user, token, isAuthenticated, login, register, logout }
 })

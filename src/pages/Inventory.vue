@@ -7,13 +7,16 @@
         <p class="text-slate-500 font-medium mt-1 text-sm">Kelola data master logistik, stok, dan sumber barang.</p>
       </div>
       
-      <!-- Pindah posisi statistik mini ke header agar lebih interaktif -->
+      <!-- Statistik Mini -->
       <div class="flex gap-4">
         <div class="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
           <v-icon icon="mdi-package-variant" color="blue-darken-2"></v-icon>
           <div>
             <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Item</p>
-            <p class="text-lg font-black text-slate-700 leading-none">{{ inventoryItems.length }}</p>
+            <p class="text-lg font-black text-slate-700 leading-none">
+              <v-progress-circular v-if="inventoryStore.isLoading" indeterminate color="blue-darken-2" size="20"></v-progress-circular>
+              <span v-else>{{ inventoryStore.items.length }}</span>
+            </p>
           </div>
         </div>
         <div class="bg-red-50 px-4 py-2 rounded-xl border border-red-100 shadow-sm flex items-center gap-3">
@@ -31,9 +34,9 @@
       title="Daftar Inventaris" 
       subtitle="Semua barang yang tercatat di sistem."
       :headers="tableHeaders" 
-      :items="inventoryItems"
+      :items="inventoryStore.items"
+      :loading="inventoryStore.isLoading"
     >
-      <!-- Tombol Aksi Tambah di Header (Enterprise Style) -->
       <template #header-actions>
         <v-btn 
           variant="flat" 
@@ -46,34 +49,37 @@
         </v-btn>
       </template>
 
-      <!-- Custom Kolom: Nama Barang dengan Icon -->
+      <!-- Custom Kolom: Nama Barang -->
       <template #item.name="{ item }">
         <div class="flex items-center gap-3 py-2">
           <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center border border-slate-200">
             <v-icon icon="mdi-archive-outline" size="16" color="slate-500"></v-icon>
           </div>
-          <span class="font-bold text-slate-700">{{ item.name }}</span>
+          <div>
+            <span class="font-bold text-slate-700 block">{{ item.name }}</span>
+            <span class="text-[10px] font-medium text-slate-400">Di: {{ item.hub?.name || 'Tidak diketahui' }}</span>
+          </div>
         </div>
       </template>
 
-      <!-- Custom Kolom: Sumber Barang (Chip Berwarna) -->
-      <template #item.source="{ item }">
-        <v-chip :color="getSourceColor(item.source)" size="small" class="font-bold uppercase text-[10px] tracking-wider" variant="tonal">
-          {{ item.source }}
+      <!-- Custom Kolom: Sumber Barang -->
+      <template #item.sumber="{ item }">
+        <v-chip :color="getSourceColor(item.sumber)" size="small" class="font-bold uppercase text-[10px] tracking-wider" variant="tonal">
+          {{ formatSumber(item.sumber) }}
         </v-chip>
       </template>
 
-      <!-- Custom Kolom: Status Stok (Kritis/Aman) -->
-      <template #item.stock="{ item }">
+      <!-- Custom Kolom: Status Stok -->
+      <template #item.stok_tersedia="{ item }">
         <div class="flex items-center gap-2">
-          <div class="w-2 h-2 rounded-full" :class="item.stock <= item.threshold ? 'bg-red-500 animate-pulse' : 'bg-green-500'"></div>
-          <span class="font-bold" :class="item.stock <= item.threshold ? 'text-red-600' : 'text-slate-700'">
-            {{ item.stock }}
+          <div class="w-2 h-2 rounded-full" :class="item.stok_tersedia <= item.threshold_stok ? 'bg-red-500 animate-pulse' : 'bg-green-500'"></div>
+          <span class="font-bold" :class="item.stok_tersedia <= item.threshold_stok ? 'text-red-600' : 'text-slate-700'">
+            {{ item.stok_tersedia }}
           </span>
         </div>
       </template>
 
-      <!-- Custom Kolom: Aksi (Edit & Delete) -->
+      <!-- Custom Kolom: Aksi -->
       <template #item.actions="{ item }">
         <div class="flex gap-1 justify-end">
           <v-btn icon="mdi-pencil-outline" size="small" color="blue-darken-2" variant="text" @click="openDialog(item)"></v-btn>
@@ -82,7 +88,7 @@
       </template>
     </AecurateTable>
 
-    <!-- Modal Form Tambah/Edit (Enterprise Style) -->
+    <!-- Modal Form Tambah/Edit -->
     <v-dialog v-model="isDialogOpen" max-width="500" persistent>
       <v-card class="rounded-[1.5rem] shadow-2xl border border-slate-100">
         <v-card-title class="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
@@ -100,22 +106,43 @@
             
             <div class="mb-4">
               <label class="block text-sm font-bold text-slate-700 mb-2 ml-1">Nama Barang</label>
-              <v-text-field v-model="formData.name" placeholder="Misal: Trash Bag Hitam" variant="outlined" bg-color="#ffffff" color="blue-darken-2" density="comfortable" hide-details="auto" class="enterprise-input"></v-text-field>
+              <v-text-field v-model="formData.name" placeholder="Misal: Tenda Sarnafil 3x3" variant="outlined" bg-color="#ffffff" color="blue-darken-2" density="comfortable" hide-details="auto" class="enterprise-input" :rules="[v => !!v || 'Wajib diisi']"></v-text-field>
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-bold text-slate-700 mb-2 ml-1">Lokasi Hub</label>
+              <v-select 
+                v-model="formData.hub_id" 
+                :items="hubStore.hubs" 
+                item-title="name" 
+                item-value="ID"
+                placeholder="Pilih Lokasi" 
+                variant="outlined" bg-color="#ffffff" color="blue-darken-2" density="comfortable" hide-details="auto" class="enterprise-input"
+                :rules="[v => !!v || 'Wajib diisi']"
+              ></v-select>
             </div>
 
             <div class="mb-4">
               <label class="block text-sm font-bold text-slate-700 mb-2 ml-1">Sumber Barang</label>
-              <v-select v-model="formData.source" :items="['Milik Sendiri', 'Sewa', 'Sponsor', 'Pembelian']" placeholder="Pilih Sumber" variant="outlined" bg-color="#ffffff" color="blue-darken-2" density="comfortable" hide-details="auto" class="enterprise-input"></v-select>
+              <v-select 
+                v-model="formData.sumber" 
+                :items="sumberOptions" 
+                item-title="title"
+                item-value="value"
+                placeholder="Pilih Sumber" 
+                variant="outlined" bg-color="#ffffff" color="blue-darken-2" density="comfortable" hide-details="auto" class="enterprise-input"
+                :rules="[v => !!v || 'Wajib diisi']"
+              ></v-select>
             </div>
 
             <div class="grid grid-cols-2 gap-4 mb-2">
               <div>
                 <label class="block text-sm font-bold text-slate-700 mb-2 ml-1">Stok Awal</label>
-                <v-text-field v-model="formData.stock" type="number" variant="outlined" bg-color="#ffffff" color="blue-darken-2" density="comfortable" hide-details="auto" class="enterprise-input"></v-text-field>
+                <v-text-field v-model="formData.stok_tersedia" type="number" variant="outlined" bg-color="#ffffff" color="blue-darken-2" density="comfortable" hide-details="auto" class="enterprise-input"></v-text-field>
               </div>
               <div>
                 <label class="block text-sm font-bold text-slate-700 mb-2 ml-1">Batas Kritis</label>
-                <v-text-field v-model="formData.threshold" type="number" variant="outlined" bg-color="#ffffff" color="blue-darken-2" density="comfortable" hint="Kirim notif jika stok = batas" persistent-hint class="enterprise-input"></v-text-field>
+                <v-text-field v-model="formData.threshold_stok" type="number" variant="outlined" bg-color="#ffffff" color="blue-darken-2" density="comfortable" hint="Indikator merah jika stok = batas" persistent-hint class="enterprise-input"></v-text-field>
               </div>
             </div>
 
@@ -124,142 +151,158 @@
 
         <v-card-actions class="px-6 py-4 border-t border-slate-100 bg-white">
           <v-spacer></v-spacer>
-          <v-btn color="slate-600" variant="text" class="font-bold text-none px-4" @click="isDialogOpen = false">Batal</v-btn>
-          <v-btn color="blue-darken-3" variant="flat" class="font-bold text-none px-6 rounded-lg shadow-md" @click="saveItem">Simpan Data</v-btn>
+          <v-btn color="slate-600" variant="text" class="font-bold text-none px-4" @click="isDialogOpen = false" :disabled="isSaving">Batal</v-btn>
+          <v-btn color="blue-darken-3" variant="flat" class="font-bold text-none px-6 rounded-lg shadow-md" @click="saveItem" :loading="isSaving">Simpan Data</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
-    <!-- Snackbar Notifikasi (Toast) -->
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" :timeout="3000" class="mt-16">
       <div class="flex items-center gap-3 font-bold tracking-wide">
         <v-icon :icon="snackbar.icon" size="20"></v-icon>
         {{ snackbar.text }}
       </div>
     </v-snackbar>
-
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import AecurateTable from '../components/AecurateTable.vue'
+import { useInventoryStore } from '../stores/inventory'
+import { useHubStore } from '../stores/hubs'
 
-// --- Notifikasi Snackbar ---
+const inventoryStore = useInventoryStore()
+const hubStore = useHubStore()
+
+onMounted(async () => {
+  await hubStore.fetchHubs() // Wajib ditarik dulu buat dropdown Hub
+  await inventoryStore.fetchItems()
+})
+
 const snackbar = ref({ show: false, text: '', color: 'success', icon: 'mdi-check-circle' })
 const showNotif = (text: string, type: 'success' | 'error' = 'success') => {
-  snackbar.value = {
-    show: true,
-    text,
-    color: type === 'success' ? 'green-darken-2' : 'red-darken-2',
-    icon: type === 'success' ? 'mdi-check-circle' : 'mdi-alert-circle'
-  }
+  snackbar.value = { show: true, text, color: type === 'success' ? 'green-darken-2' : 'red-darken-2', icon: type === 'success' ? 'mdi-check-circle' : 'mdi-alert-circle' }
 }
 
-// --- Definisi Kolom Tabel ---
 const tableHeaders = [
-  { title: 'KODE', key: 'code', sortable: true },
+  { title: 'ID', key: 'ID', sortable: true },
   { title: 'NAMA BARANG', key: 'name', sortable: true },
-  { title: 'SUMBER', key: 'source', sortable: true },
-  { title: 'STOK', key: 'stock', sortable: true },
-  { title: 'BATAS KRITIS', key: 'threshold', sortable: false },
+  { title: 'SUMBER', key: 'sumber', sortable: true },
+  { title: 'STOK', key: 'stok_tersedia', sortable: true },
+  { title: 'BATAS KRITIS', key: 'threshold_stok', sortable: false },
   { title: 'AKSI', key: 'actions', sortable: false, align: 'end' }
 ]
 
-// --- Data Master Dummy ---
-const inventoryItems = ref([
-  { id: 1, code: 'ITM-001', name: 'HT Motorola', source: 'Sewa', stock: 45, threshold: 5 },
-  { id: 2, code: 'ITM-002', name: 'Trash Bag Besar', source: 'Pembelian', stock: 10, threshold: 15 },
-  { id: 3, code: 'ITM-003', name: 'Tenda Sarnafil 3x3', source: 'Sewa', stock: 8, threshold: 2 },
-  { id: 4, code: 'ITM-004', name: 'Air Mineral Galon', source: 'Sponsor', stock: 50, threshold: 10 },
-  { id: 5, code: 'ITM-005', name: 'Rompi Reflektor', source: 'Milik Sendiri', stock: 120, threshold: 20 },
-])
+const sumberOptions = [
+  { title: 'Milik Sendiri', value: 'milik_sendiri' },
+  { title: 'Sewa', value: 'sewa' },
+  { title: 'Sponsor', value: 'sponsor' },
+  { title: 'Pembelian', value: 'beli' }
+]
 
-// Computed property untuk menghitung stok kritis secara real-time
 const criticalItemsCount = computed(() => {
-  return inventoryItems.value.filter(item => item.stock <= item.threshold).length
+  return inventoryStore.items.filter(item => item.stok_tersedia <= item.threshold_stok).length
 })
 
-// --- Logika Modal & Form CRUD ---
+const form = ref<any>(null)
 const isDialogOpen = ref(false)
 const isEditing = ref(false)
-const formData = ref<any>({ id: null, code: '', name: '', source: '', stock: 0, threshold: 0 })
+const isSaving = ref(false)
+const formData = ref<any>({ id: null, name: '', sumber: '', stok_tersedia: 0, threshold_stok: 0, hub_id: null })
 
 const openDialog = (item: any = null) => {
   if (item) {
     isEditing.value = true
-    formData.value = { ...item }
+    formData.value = { 
+      id: item.ID, 
+      name: item.name, 
+      sumber: item.sumber, 
+      stok_tersedia: item.stok_tersedia, 
+      threshold_stok: item.threshold_stok,
+      hub_id: item.hub_id
+    }
   } else {
     isEditing.value = false
-    // Generate kode unik sederhana untuk dummy
-    const newCode = `ITM-${String(inventoryItems.value.length + 1).padStart(3, '0')}`
-    formData.value = { id: null, code: newCode, name: '', source: '', stock: 0, threshold: 0 }
+    formData.value = { id: null, name: '', sumber: null, stok_tersedia: 0, threshold_stok: 0, hub_id: null }
   }
   isDialogOpen.value = true
 }
 
-const saveItem = () => {
-  if (!formData.value.name || !formData.value.source) {
-    showNotif('Nama dan Sumber barang wajib diisi!', 'error')
-    return
-  }
+const saveItem = async () => {
+  const { valid } = await form.value.validate()
+  if (!valid) return
 
-  // Konversi string inputan angka ke Number
-  const payload = {
-    ...formData.value,
-    stock: Number(formData.value.stock),
-    threshold: Number(formData.value.threshold)
-  }
-
-  if (isEditing.value) {
-    // Update data array
-    const index = inventoryItems.value.findIndex(i => i.id === payload.id)
-    if (index !== -1) inventoryItems.value[index] = payload
-    showNotif('Data barang berhasil diperbarui')
-  } else {
-    // Insert data baru ke array
-    payload.id = Date.now()
-    inventoryItems.value.push(payload)
-    showNotif('Barang baru berhasil ditambahkan')
-  }
+  isSaving.value = true
   
-  isDialogOpen.value = false
-}
+  const payload = {
+    name: formData.value.name,
+    sumber: formData.value.sumber,
+    stok_tersedia: Number(formData.value.stok_tersedia),
+    threshold_stok: Number(formData.value.threshold_stok),
+    hub_id: formData.value.hub_id
+  }
 
-const deleteItem = (item: any) => {
-  if (confirm(`Apakah Anda yakin ingin menghapus ${item.name}?`)) {
-    inventoryItems.value = inventoryItems.value.filter(i => i.id !== item.id)
-    showNotif(`${item.name} berhasil dihapus dari sistem`)
+  let result;
+  if (isEditing.value) {
+    result = await inventoryStore.updateItem(formData.value.id, payload)
+  } else {
+    result = await inventoryStore.createItem(payload)
+  }
+
+  isSaving.value = false
+
+  if (result.success) {
+    showNotif(result.message, 'success')
+    isDialogOpen.value = false
+  } else {
+    showNotif(result.message, 'error')
   }
 }
 
-// --- Helper Warna Chip Sumber ---
+const deleteItem = async (item: any) => {
+  if (confirm(`Apakah Anda yakin ingin menghapus ${item.name}?`)) {
+    const result = await inventoryStore.deleteItem(item.ID)
+    if (result.success) {
+      showNotif(result.message, 'success')
+    } else {
+      showNotif(result.message, 'error')
+    }
+  }
+}
+
+// --- Helper Tampilan Enum Sumber ---
+const formatSumber = (source: string) => {
+  const format: Record<string, string> = {
+    'milik_sendiri': 'Milik Sendiri',
+    'sewa': 'Sewa',
+    'sponsor': 'Sponsor',
+    'beli': 'Beli Baru'
+  }
+  return format[source] || source
+}
+
 const getSourceColor = (source: string) => {
   const colors: Record<string, string> = {
-    'Sewa': 'purple-darken-2',
-    'Pembelian': 'blue-darken-2',
-    'Sponsor': 'teal-darken-2',
-    'Milik Sendiri': 'slate-600'
+    'sewa': 'purple-darken-2',
+    'beli': 'blue-darken-2',
+    'sponsor': 'teal-darken-2',
+    'milik_sendiri': 'slate-600'
   }
   return colors[source] || 'grey'
 }
 </script>
 
 <style scoped>
-/* Menyamakan styling input form dengan Login Page */
 :deep(.v-field) {
   border-radius: 12px !important;
   border: 1px solid #e2e8f0;
   transition: all 0.2s ease;
 }
-:deep(.v-field:hover) {
-  border-color: #cbd5e1;
-}
+:deep(.v-field:hover) { border-color: #cbd5e1; }
 :deep(.v-field--focused) {
   border-color: #2563eb !important;
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
 }
-:deep(.v-field__outline) {
-  display: none; 
-}
+:deep(.v-field__outline) { display: none; }
 </style>
